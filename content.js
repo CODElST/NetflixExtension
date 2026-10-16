@@ -11,6 +11,7 @@
   const SKIP_LABEL = /\bskip\s+(the\s+)?(intro|recap)\b/i;
   const clickedButtons = new WeakSet();
   let scanQueued = false;
+  let visibilityPoll = null;
 
   function getButtonLabel(element) {
     return [
@@ -41,22 +42,31 @@
     const candidates = document.querySelectorAll(
       `${SKIP_BUTTON_SELECTORS}, button, [role="button"]`
     );
+    let hiddenCandidate = null;
 
     for (const element of candidates) {
-      if (
-        !isVisible(element) ||
-        element.disabled ||
-        element.getAttribute("aria-disabled") === "true" ||
-        clickedButtons.has(element)
-      ) continue;
+      if (element.disabled || element.getAttribute("aria-disabled") === "true") continue;
+      if (clickedButtons.has(element)) continue;
 
       const isNetflixSkipButton = element.matches(SKIP_BUTTON_SELECTORS);
-      if (isNetflixSkipButton || SKIP_LABEL.test(getButtonLabel(element))) {
-        return element;
-      }
+      if (!isNetflixSkipButton && !SKIP_LABEL.test(getButtonLabel(element))) continue;
+      if (isVisible(element)) return element;
+      if (!hiddenCandidate) hiddenCandidate = element;
     }
 
-    return null;
+    return hiddenCandidate;
+  }
+
+  function clickSkipButton(button) {
+    clickedButtons.add(button);
+    button.click();
+    console.info("Netflix Auto Skip: skipped intro or recap.");
+  }
+
+  function stopVisibilityPoll() {
+    if (visibilityPoll === null) return;
+    window.clearInterval(visibilityPoll);
+    visibilityPoll = null;
   }
 
   function scanAndSkip() {
@@ -64,9 +74,25 @@
     const button = findSkipButton();
     if (!button) return;
 
-    clickedButtons.add(button);
-    button.click();
-    console.info("Netflix Auto Skip: skipped intro or recap.");
+    if (isVisible(button)) {
+      stopVisibilityPoll();
+      clickSkipButton(button);
+      return;
+    }
+
+    // Poll briefly only when Netflix has mounted a matching but hidden button.
+    if (visibilityPoll !== null) return;
+    let attempts = 0;
+    visibilityPoll = window.setInterval(() => {
+      attempts += 1;
+      const candidate = findSkipButton();
+      if (candidate && isVisible(candidate)) {
+        stopVisibilityPoll();
+        clickSkipButton(candidate);
+      } else if (!candidate || attempts >= 20) {
+        stopVisibilityPoll();
+      }
+    }, 100);
   }
 
   function queueScan() {
@@ -83,8 +109,5 @@
     attributeFilter: ["aria-label", "data-uia", "title", "class"]
   });
 
-  // Netflix can reveal an existing player control through CSS without a DOM
-  // mutation, so periodically check as a fallback to the mutation observer.
-  window.setInterval(queueScan, 500);
   queueScan();
 })();
