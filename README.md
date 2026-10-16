@@ -1,4 +1,4 @@
-# Netflix Auto Skip Intro & Recap
+# NextSkip
 
 A small Chrome/Chromium extension that automatically clicks Netflix's **Skip
 Recap** and **Skip Intro** controls.
@@ -25,6 +25,12 @@ and the choices sync through Chrome storage.
   URL.
 
 The extension uses no extra browser permissions beyond its Netflix site match.
+
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md) for details about the information NextSkip processes
+and stores. Publish this policy at a public URL and add that URL to the Chrome
+Web Store Developer Dashboard before submitting the extension.
 
 ## Install locally
 
