@@ -32,4 +32,6 @@ The extension uses no extra browser permissions beyond its Netflix site match.
    another Chromium browser).
 2. Turn on **Developer mode**.
 3. Choose **Load unpacked** and select this project folder.
-4. Reload the extension and refresh the Netflix tab if it was already open.
+4. After installing or updating the extension, click **Reload** for it on
+   `chrome://extensions`.
+5. Reload any open Netflix tabs so they receive the latest extension changes.
