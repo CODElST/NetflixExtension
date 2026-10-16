@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Netflix Auto Skip Intro & Recap",
+  "version": "1.0.0",
+  "description": "Automatically skips recap and intro segments on Netflix.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
