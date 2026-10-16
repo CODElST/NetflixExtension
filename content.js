@@ -10,8 +10,15 @@
 
   const SKIP_LABEL = /\bskip\s+(the\s+)?(intro|recap)\b/i;
   const clickedButtons = new WeakSet();
+  const watchedVisibility = new WeakMap();
   let scanQueued = false;
-  let visibilityPoll = null;
+  let stopped = false;
+  let observer;
+  let episodeKey = getEpisodeKey();
+
+  function getEpisodeKey() {
+    return window.location.pathname.match(/\/watch\/([^/]+)/)?.[1] || null;
+  }
 
   function getButtonLabel(element) {
     return [
@@ -27,15 +34,46 @@
   }
 
   function isVisible(element) {
-    const style = window.getComputedStyle(element);
     const rect = element.getBoundingClientRect();
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      Number(style.opacity) > 0 &&
-      rect.width > 0 &&
-      rect.height > 0
-    );
+    if (rect.width <= 0 || rect.height <= 0) return false;
+
+    for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+      const style = window.getComputedStyle(ancestor);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        Number(style.opacity) <= 0
+      ) return false;
+    }
+
+    return true;
+  }
+
+  function watchForVisibility(element) {
+    if (watchedVisibility.has(element)) return;
+    const targets = [];
+    const onVisibilityChange = () => {
+      if (isVisible(element)) queueScan();
+    };
+
+    for (let target = element; target; target = target.parentElement) {
+      target.addEventListener("transitionend", onVisibilityChange);
+      target.addEventListener("animationend", onVisibilityChange);
+      targets.push(target);
+    }
+
+    watchedVisibility.set(element, { targets, onVisibilityChange });
+  }
+
+  function stopWatchingVisibility(element) {
+    const watcher = watchedVisibility.get(element);
+    if (!watcher) return;
+
+    for (const target of watcher.targets) {
+      target.removeEventListener("transitionend", watcher.onVisibilityChange);
+      target.removeEventListener("animationend", watcher.onVisibilityChange);
+    }
+    watchedVisibility.delete(element);
   }
 
   function findSkipButton() {
@@ -58,55 +96,65 @@
   }
 
   function clickSkipButton(button) {
+    const label = `${button.getAttribute("data-uia") || ""} ${getButtonLabel(button)}`;
     clickedButtons.add(button);
     button.click();
-    console.info("Netflix Auto Skip: skipped intro or recap.");
-  }
 
-  function stopVisibilityPoll() {
-    if (visibilityPoll === null) return;
-    window.clearInterval(visibilityPoll);
-    visibilityPoll = null;
+    if (/\bintro\b/i.test(label)) {
+      stopped = true;
+      observer.disconnect();
+      stopWatchingVisibility(button);
+    }
   }
 
   function scanAndSkip() {
     scanQueued = false;
+    if (stopped) return;
     const button = findSkipButton();
     if (!button) return;
 
     if (isVisible(button)) {
-      stopVisibilityPoll();
+      stopWatchingVisibility(button);
       clickSkipButton(button);
       return;
     }
 
-    // Poll briefly only when Netflix has mounted a matching but hidden button.
-    if (visibilityPoll !== null) return;
-    let attempts = 0;
-    visibilityPoll = window.setInterval(() => {
-      attempts += 1;
-      const candidate = findSkipButton();
-      if (candidate && isVisible(candidate)) {
-        stopVisibilityPoll();
-        clickSkipButton(candidate);
-      } else if (!candidate || attempts >= 20) {
-        stopVisibilityPoll();
-      }
-    }, 100);
+    watchForVisibility(button);
   }
 
   function queueScan() {
-    if (scanQueued) return;
+    if (stopped || scanQueued) return;
     scanQueued = true;
     window.requestAnimationFrame(scanAndSkip);
   }
 
-  const observer = new MutationObserver(queueScan);
+  observer = new MutationObserver(queueScan);
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
     attributes: true,
     attributeFilter: ["aria-label", "data-uia", "title", "class"]
+  });
+
+  window.addEventListener("netflix-auto-skip-route-change-v1", () => {
+    const nextEpisodeKey = getEpisodeKey();
+    if (!nextEpisodeKey) {
+      episodeKey = null;
+      return;
+    }
+    if (nextEpisodeKey === episodeKey) return;
+
+    episodeKey = nextEpisodeKey;
+    if (stopped) {
+      stopped = false;
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["aria-label", "data-uia", "title", "class"]
+      });
+    }
+    queueScan();
   });
 
   queueScan();
