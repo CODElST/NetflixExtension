@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Netflix Auto Skip</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <h1>Netflix Auto Skip</h1>
+      <p class="intro">Choose what to skip automatically.</p>
+
+      <label class="setting" for="skipIntros">
+        <span class="setting-copy">
+          <span class="setting-title">Skip intros</span>
+          <span class="setting-description">Skip episode opening titles</span>
+        </span>
+        <input id="skipIntros" type="checkbox" disabled>
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+
+      <label class="setting" for="skipRecaps">
+        <span class="setting-copy">
+          <span class="setting-title">Skip recaps</span>
+          <span class="setting-description">Skip the recap before an episode</span>
+        </span>
+        <input id="skipRecaps" type="checkbox" disabled>
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

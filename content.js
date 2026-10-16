@@ -9,8 +9,11 @@
   ].join(",");
 
   const SKIP_LABEL = /\bskip\s+(the\s+)?(intro|recap)\b/i;
+  const DEFAULT_SETTINGS = { skipIntros: true, skipRecaps: true };
   const clickedButtons = new WeakSet();
-  const watchedVisibility = new WeakMap();
+  const watchedVisibility = new Map();
+  let settings = { ...DEFAULT_SETTINGS };
+  let settingsReady = false;
   let scanQueued = false;
   let stopped = false;
   let observer;
@@ -31,6 +34,54 @@
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function getSkipType(element) {
+    const label = `${element.getAttribute("data-uia") || ""} ${getButtonLabel(element)}`;
+    if (/skip[-_\s]+(the[-_\s]+)?intro|\bskip\s+(the\s+)?intro\b/i.test(label)) {
+      return "intro";
+    }
+    if (/skip[-_\s]+(the[-_\s]+)?recap|\bskip\s+(the\s+)?recap\b/i.test(label)) {
+      return "recap";
+    }
+    return null;
+  }
+
+  function hasEnabledSkips() {
+    return settings.skipIntros || settings.skipRecaps;
+  }
+
+  function observePlayer() {
+    if (!settingsReady || !hasEnabledSkips() || stopped) return;
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "data-uia", "title", "class"]
+    });
+    queueScan();
+  }
+
+  function clearVisibilityWatches() {
+    for (const element of watchedVisibility.keys()) {
+      stopWatchingVisibility(element);
+    }
+  }
+
+  function applySettings(nextSettings) {
+    settings = {
+      skipIntros: nextSettings.skipIntros !== false,
+      skipRecaps: nextSettings.skipRecaps !== false
+    };
+    settingsReady = true;
+    clearVisibilityWatches();
+
+    if (hasEnabledSkips()) {
+      stopped = false;
+      observePlayer();
+    } else {
+      observer.disconnect();
+    }
   }
 
   function isVisible(element) {
@@ -87,7 +138,10 @@
       if (clickedButtons.has(element)) continue;
 
       const isNetflixSkipButton = element.matches(SKIP_BUTTON_SELECTORS);
-      if (!isNetflixSkipButton && !SKIP_LABEL.test(getButtonLabel(element))) continue;
+      const skipType = getSkipType(element);
+      if (!skipType || (!isNetflixSkipButton && !SKIP_LABEL.test(getButtonLabel(element)))) continue;
+      if (skipType === "intro" && !settings.skipIntros) continue;
+      if (skipType === "recap" && !settings.skipRecaps) continue;
       if (isVisible(element)) return element;
       if (!hiddenCandidate) hiddenCandidate = element;
     }
@@ -96,20 +150,20 @@
   }
 
   function clickSkipButton(button) {
-    const label = `${button.getAttribute("data-uia") || ""} ${getButtonLabel(button)}`;
+    const skipType = getSkipType(button);
     clickedButtons.add(button);
     button.click();
 
-    if (/\bintro\b/i.test(label)) {
+    if (skipType === "intro" || (skipType === "recap" && !settings.skipIntros)) {
       stopped = true;
       observer.disconnect();
-      stopWatchingVisibility(button);
+      clearVisibilityWatches();
     }
   }
 
   function scanAndSkip() {
     scanQueued = false;
-    if (stopped) return;
+    if (!settingsReady || !hasEnabledSkips() || stopped) return;
     const button = findSkipButton();
     if (!button) return;
 
@@ -123,17 +177,21 @@
   }
 
   function queueScan() {
-    if (stopped || scanQueued) return;
+    if (!settingsReady || !hasEnabledSkips() || stopped || scanQueued) return;
     scanQueued = true;
     window.requestAnimationFrame(scanAndSkip);
   }
 
   observer = new MutationObserver(queueScan);
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["aria-label", "data-uia", "title", "class"]
+
+  chrome.storage.sync.get(DEFAULT_SETTINGS, applySettings);
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "sync") return;
+    if (!changes.skipIntros && !changes.skipRecaps) return;
+    applySettings({
+      skipIntros: changes.skipIntros?.newValue ?? settings.skipIntros,
+      skipRecaps: changes.skipRecaps?.newValue ?? settings.skipRecaps
+    });
   });
 
   window.addEventListener("netflix-auto-skip-route-change-v1", () => {
@@ -145,17 +203,8 @@
     if (nextEpisodeKey === episodeKey) return;
 
     episodeKey = nextEpisodeKey;
-    if (stopped) {
-      stopped = false;
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["aria-label", "data-uia", "title", "class"]
-      });
-    }
+    if (stopped) stopped = false;
+    observePlayer();
     queueScan();
   });
-
-  queueScan();
 })();

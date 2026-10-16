@@ -3,6 +3,12 @@
 A small Chrome/Chromium extension that automatically clicks Netflix's **Skip
 Recap** and **Skip Intro** controls.
 
+## Settings
+
+Click the extension icon to open its popup. Use the separate toggles to enable
+or disable automatic intro skipping and recap skipping. Both are on by default,
+and the choices sync through Chrome storage.
+
 ## How it works
 
 - It runs on `www.netflix.com` and watches the player UI for Netflix's skip
@@ -10,8 +16,9 @@ Recap** and **Skip Intro** controls.
 - A `MutationObserver` reacts to player UI changes. If a matching button is
   mounted but hidden, transition and animation events let the extension check
   again when it becomes visible. It does not use a polling loop.
-- After skipping a recap, it keeps watching for a possible intro. After
-  skipping the intro, it disconnects the player observer.
+- After skipping a recap, it keeps watching for an intro only when intro
+  skipping is enabled. When there are no more enabled skip types to look for,
+  it disconnects the player observer.
 - A small script in the page's main JavaScript world listens for History API
   and navigation events. When Netflix changes to another episode, it signals
   the extension to resume watching. This is event-driven and does not poll the
