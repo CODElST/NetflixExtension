@@ -9,6 +9,7 @@
   ].join(",");
 
   const SKIP_LABEL = /\bskip\s+(the\s+)?(intro|recap)\b/i;
+  const clickedButtons = new WeakSet();
   let scanQueued = false;
 
   function getButtonLabel(element) {
@@ -30,7 +31,7 @@
     return (
       style.display !== "none" &&
       style.visibility !== "hidden" &&
-      Number(style.opacity) !== 0 &&
+      Number(style.opacity) > 0 &&
       rect.width > 0 &&
       rect.height > 0
     );
@@ -42,7 +43,12 @@
     );
 
     for (const element of candidates) {
-      if (!isVisible(element) || element.disabled) continue;
+      if (
+        !isVisible(element) ||
+        element.disabled ||
+        element.getAttribute("aria-disabled") === "true" ||
+        clickedButtons.has(element)
+      ) continue;
 
       const isNetflixSkipButton = element.matches(SKIP_BUTTON_SELECTORS);
       if (isNetflixSkipButton || SKIP_LABEL.test(getButtonLabel(element))) {
@@ -58,6 +64,7 @@
     const button = findSkipButton();
     if (!button) return;
 
+    clickedButtons.add(button);
     button.click();
     console.info("Netflix Auto Skip: skipped intro or recap.");
   }
@@ -76,5 +83,8 @@
     attributeFilter: ["aria-label", "data-uia", "title", "class"]
   });
 
+  // Netflix can reveal an existing player control through CSS without a DOM
+  // mutation, so periodically check as a fallback to the mutation observer.
+  window.setInterval(queueScan, 500);
   queueScan();
 })();
