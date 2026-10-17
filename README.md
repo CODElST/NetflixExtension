@@ -3,6 +3,8 @@
 A small Chrome/Chromium extension that automatically clicks Netflix's **Skip
 Recap** and **Skip Intro** controls.
 
+Chrome Web Store Extension: https://chromewebstore.google.com/detail/nextskip/obpfdcbglcfohgjcdidcjblekdjmljjn
+
 ## Settings
 
 Click the extension icon to open its popup. Use the separate toggles to enable
